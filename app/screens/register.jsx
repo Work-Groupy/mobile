@@ -11,6 +11,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -49,12 +50,12 @@ export default function RegisterScreen() {
 
     console.log("Usuário criado:", response.data);
 
-    alert("Conta criada com sucesso!", "Perfeito!");
-    navigation.navigate("Login");
+    Alert.alert("Conta criada com sucesso!", "Perfeito!");
+    navigation.navigate("Home");
 
   } catch (err) {
     console.log("Erro:", err);
-    alert("Erro ao criar conta. Tente novamente.");
+    Alert.alert("Erro ao criar conta", "Tente novamente.");
   }
 };
 
@@ -175,14 +176,30 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#000' },
-  gradient: { flex: 1 },
-  scrollContent: { paddingTop: 24, paddingBottom: 40 },
+  safe: { 
+    flex: 1, 
+    backgroundColor: '#000' 
+  },
 
-  /* Logo */
-  logoWrapper: { alignItems: 'center', marginBottom: 22 },
-  logoImage: { width: 100, height: 100, resizeMode: 'contain' },
+  gradient: { 
+    flex: 1 
+  },
 
+  scrollContent: { 
+    paddingTop: 24, 
+    paddingBottom: 40 
+  },
+
+  logoWrapper: { 
+    alignItems: 'center', 
+    marginBottom: 22 
+  },
+
+  logoImage: { 
+    width: 100, 
+    height: 100, 
+    resizeMode: 'contain' 
+  },
   kicker: {
     color: '#AAAAAA',
     fontSize: 12,
@@ -216,8 +233,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 20,
   },
-
-  /* Form */
   formWrapper: { paddingHorizontal: 24 },
   inputGroup: { marginBottom: 14 },
   inputLabel: {
@@ -268,9 +283,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  /* Actions */
-  ctaStack: { marginTop: 16, gap: 12 },
+  ctaStack: 
+  { 
+    marginTop: 16, 
+    gap: 12 
+  },
   primaryButton: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 14,
@@ -281,8 +298,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
     borderColor: '#2A2A2A',
   },
-  primaryButtonText: { color: '#000000', fontSize: 16, fontWeight: '800', letterSpacing: 0.4 },
-  primaryButtonTextDisabled: { color: '#999999' },
+  primaryButtonText:{ 
+    color: '#000000',
+    fontSize: 16, 
+    fontWeight: '800', 
+    letterSpacing: 0.4 
+  },
+  primaryButtonTextDisabled: { 
+    color: '#999999' 
+  },
   secondaryButton: {
     backgroundColor: '#111111',
     paddingVertical: 14,
@@ -291,12 +315,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2A2A2A',
   },
-  secondaryButtonText: { color: '#FFFFFF', fontSize: 15.5, fontWeight: '700' },
+  secondaryButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 15.5, 
+    fontWeight: '700' 
+  },
+  footerArea: { 
+    marginTop: 36, 
+    alignItems: 'center', 
+    paddingHorizontal: 24 
+  },
 
-  /* Footer */
-  footerArea: { marginTop: 36, alignItems: 'center', paddingHorizontal: 24 },
-  footerBrand: { color: '#777777', fontSize: 12, fontWeight: '600' },
-  footerLinksRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  footerLink: { color: '#B5B5B5', fontSize: 12, fontWeight: '700' },
-  footerSep: { color: '#333333', fontSize: 12, fontWeight: '700' },
+  footerBrand: { 
+    color: '#777777', 
+    fontSize: 12, 
+    fontWeight: '600' 
+  },
+
+  footerLinksRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 10, 
+    flexWrap: 'wrap' 
+  },
+
+  footerLink: { 
+    color: '#B5B5B5', 
+    fontSize: 12, 
+    fontWeight: '700' 
+  },
+
+  footerSep: { 
+    color: '#333333', 
+    fontSize: 12, 
+    fontWeight: '700' 
+  },
 });

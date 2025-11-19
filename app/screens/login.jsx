@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import React, { useState } from 'react';
+import { useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { API_URL } from '@env';
+import axios from "axios";
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -21,6 +23,36 @@ export default function LoginScreen() {
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [lembrar, setLembrar] = useState(true);
+
+  const handleLogin = async () => {
+  if (!email.trim() || !senha.trim()) {
+    alert("Preencha o e-mail e a senha.");
+    return;
+  }
+
+  const payload = {
+    email: email.trim(),
+    password: senha,
+  };
+
+  try {
+    const response = await axios.post(
+      `${API_URL}/user/login`,
+      payload,
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    console.log("Login realizado:", response.data);
+
+    navigation.navigate("Home");
+
+  } catch (err) {
+    console.log("Erro:", err.response?.data || err.message);
+    alert("E-mail ou senha incorretos.");
+  }
+};
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -90,16 +122,6 @@ export default function LoginScreen() {
               </View>
 
               <View style={styles.rowBetween}>
-                <TouchableOpacity
-                  onPress={() => setLembrar(v => !v)}
-                  activeOpacity={0.8}
-                  style={styles.rememberRow}
-                >
-                  <View style={[styles.checkbox, lembrar && styles.checkboxChecked]}>
-                    {lembrar && <View style={styles.checkboxDot} />}
-                  </View>
-                  <Text style={styles.rememberText}>Lembrar de mim</Text>
-                </TouchableOpacity>
 
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -109,12 +131,11 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
-              {/* Actions */}
               <View style={styles.ctaStack}>
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.primaryButton}
-                  // onPress={() => {}}
+                  onPress={handleLogin}
                 >
                   <Text style={styles.primaryButtonText}>Entrar</Text>
                 </TouchableOpacity>
@@ -170,7 +191,6 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     tintColor: undefined,
   },
-
   kicker: {
     color: '#AAAAAA',
     fontSize: 12,
@@ -204,8 +224,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 20,
   },
-
-  /* Form */
   formWrapper: {
     paddingHorizontal: 24,
   },
@@ -256,7 +274,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
   rowBetween: {
     marginTop: 8,
     marginBottom: 8,
@@ -299,8 +316,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
   },
-
-  /* Actions */
   ctaStack: {
     marginTop: 16,
     gap: 12,
@@ -339,8 +354,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-
-  /* Divider */
   dividerRow: {
     marginTop: 22,
     flexDirection: 'row',
@@ -357,8 +370,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-
-  /* Social */
   socialRow: {
     marginTop: 14,
     gap: 10,
@@ -376,8 +387,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-
-  /* Footer */
   footerArea: {
     marginTop: 36,
     alignItems: 'center',
