@@ -1,5 +1,5 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,20 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useAuth } from '../context/AuthContext';
 import { API_URL } from '@env';
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+  const [fullUser, setFullUser] = useState(null);
+  const [loadingFullUser, setLoadingFullUser] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [users, setUsers] = useState([]);
-  const [following, setFollowing] = useState({}); // { [id]: true }
+  const [following, setFollowing] = useState({});
 
-  const postExcerpt = 'Uma reflexão direta sobre como a automação e a IA podem deslocar funções tradicionais, mas também abrir portas...';
+  const postExcerpt =
+    'Uma reflexão direta sobre como a automação e a IA podem deslocar funções tradicionais, mas também abrir portas...';
   const postFull = useMemo(
     () =>
       'O perigo dos futuros trabalhos não está apenas na substituição por máquinas, mas na rapidez da transformação. ' +
@@ -32,43 +37,115 @@ export default function HomeScreen() {
 
   useEffect(() => {
     let mounted = true;
-    const fetchUsers = async () => {
+    async function fetchFullUser() {
+      if (!user?.id) return;
+      try {
+        setLoadingFullUser(true);
+        const res = await fetch(`${API_URL}/user/${user.id}`, {
+          headers: { Accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (mounted) setFullUser(data);
+      } catch {
+        if (mounted) setFullUser(null);
+      } finally {
+        if (mounted) setLoadingFullUser(false);
+      }
+    }
+    fetchFullUser();
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchUsers() {
       try {
         setLoadingUsers(true);
-        const res = await fetch(`${API_URL}/user/all`, { headers: { Accept: 'application/json' } });
+        const res = await fetch(`${API_URL}/user/all`, {
+          headers: { Accept: 'application/json' },
+        });
         if (!res.ok) throw new Error(`Falha ao buscar usuários: ${res.status}`);
         const data = await res.json();
-        // Esperado: [{ id, name, email, profile(base64?) ... }]
-        if (mounted) setUsers(Array.isArray(data) ? data : []);
-      } catch (err) {
+        if (mounted) {
+          const arr = Array.isArray(data) ? data : [];
+          const filtered = user?.id ? arr.filter(u => String(u.id) !== String(user.id)) : arr;
+          setUsers(filtered);
+        }
+      } catch {
         if (mounted) setUsers([]);
       } finally {
         if (mounted) setLoadingUsers(false);
       }
-    };
+    }
     fetchUsers();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [user?.id]);
 
-  const toggleFollow = (id) => setFollowing((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleFollow = (id) =>
+    setFollowing(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const getInitial = (name) => {
+    if (!name || typeof name !== 'string') return '?';
+    const t = name.trim();
+    if (!t) return '?';
+    return t[0].toUpperCase();
+  };
+
+  const renderAvatarBubble = () => {
+    if (loadingFullUser || !user) {
+      return (
+        <View style={[styles.profileBubble, styles.profileLoading]}>
+          <ActivityIndicator color="#fff" size="small" />
+        </View>
+      );
+    }
+    const displayUser = fullUser || user;
+    const profileBase64 = displayUser.profile;
+    const hasProfile =
+      profileBase64 &&
+      typeof profileBase64 === 'string' &&
+      profileBase64 !== 'null' &&
+      profileBase64.length > 10;
+    if (hasProfile) {
+      return (
+        <View style={styles.profileBubble}>
+          <Image
+            source={{ uri: `data:image/png;base64,${profileBase64}` }}
+            style={styles.profileImage}
+          />
+        </View>
+      );
+    }
+    return (
+      <View style={styles.profileBubble}>
+        <Text style={styles.profileInitial}>{getInitial(displayUser.name)}</Text>
+      </View>
+    );
+  };
 
   const renderUserAvatar = (u) => {
-    if (u?.profile) {
-      // Se o backend enviar base64, renderiza como data URI
+    const profileBase64 = u?.profile;
+    const hasProfile =
+      profileBase64 &&
+      typeof profileBase64 === 'string' &&
+      profileBase64 !== 'null' &&
+      profileBase64.length > 10;
+    if (hasProfile) {
       return (
         <Image
-          source={{ uri: `data:image/png;base64,${u.profile}` }}
+          source={{ uri: `data:image/png;base64,${profileBase64}` }}
           style={styles.personAvatarImg}
         />
       );
     }
-    // fallback: iniciais
-    const initial = (u?.name || '?').trim().charAt(0).toUpperCase();
     return (
       <View style={styles.personAvatarFallback}>
-        <Text style={styles.avatarInitial}>{initial}</Text>
+        <Text style={styles.avatarInitial}>{getInitial(u?.name)}</Text>
       </View>
     );
   };
@@ -76,22 +153,35 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="light-content" />
-      <LinearGradient colors={['#000000', '#050505', '#111111']} style={styles.gradient}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <LinearGradient
+        colors={['#000000', '#050505', '#111111']}
+        style={styles.gradient}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.headerRow}>
             <View style={styles.brandRow}>
-              <Image source={require('../assets/logo.png')} style={styles.logoImage} />
+              <Image
+                source={require('../assets/logo.png')}
+                style={styles.logoImage}
+              />
             </View>
-            <TouchableOpacity activeOpacity={0.8} style={styles.profileBubble}>
-              <Text style={styles.profileInitial}>B</Text>
-            </TouchableOpacity>
+            {renderAvatarBubble()}
           </View>
+
           <Text style={styles.sectionIntroTitle}>Início</Text>
-          <Text style={styles.sectionIntroSubtitle}>Veja um destaque e pessoas para seguir.</Text>
+          <Text style={styles.sectionIntroSubtitle}>
+            Veja um destaque e pessoas para seguir.
+          </Text>
+
           <View style={styles.postCard}>
             <View style={styles.postHeader}>
               <Image
-                source={{ uri: 'https://avatars.githubusercontent.com/u/160923665?v=4' }}
+                source={{
+                  uri: 'https://avatars.githubusercontent.com/u/160923665?v=4',
+                }}
                 style={styles.postAvatar}
               />
               <View style={{ flex: 1 }}>
@@ -100,21 +190,27 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <TouchableOpacity onPress={() => setExpanded((e) => !e)} activeOpacity={0.8}>
-              <Text style={styles.postTitle}>Futuros trabalhos: perigo e novas oportunidades</Text>
-              <Text
-                style={styles.postBody}
-                numberOfLines={expanded ? 0 : 3}
-              >
+            <TouchableOpacity
+              onPress={() => setExpanded(e => !e)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.postTitle}>
+                Futuros trabalhos: perigo e novas oportunidades
+              </Text>
+              <Text style={styles.postBody} numberOfLines={expanded ? 0 : 3}>
                 {expanded ? postFull : postExcerpt}
               </Text>
-              <Text style={styles.postMore}>{expanded ? 'Recolher ▲' : 'Ler mais ▼'}</Text>
+              <Text style={styles.postMore}>
+                {expanded ? 'Recolher ▲' : 'Ler mais ▼'}
+              </Text>
             </TouchableOpacity>
           </View>
-          
+
           <View style={styles.peopleHeader}>
             <Text style={styles.peopleTitle}>Pessoas para seguir</Text>
-            <Text style={styles.peopleSubtitle}>Conecte-se com profissionais</Text>
+            <Text style={styles.peopleSubtitle}>
+              Conecte-se com profissionais
+            </Text>
           </View>
 
           {loadingUsers ? (
@@ -125,7 +221,7 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>Nenhum usuário encontrado.</Text>
           ) : (
             <View style={styles.peopleList}>
-              {users.map((u) => {
+              {users.map(u => {
                 const isFollowing = !!following[u.id];
                 return (
                   <View key={u.id} style={styles.personRow}>
@@ -143,7 +239,10 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       onPress={() => toggleFollow(u.id)}
                       activeOpacity={0.85}
-                      style={[styles.followBtn, isFollowing ? styles.following : styles.toFollow]}
+                      style={[
+                        styles.followBtn,
+                        isFollowing ? styles.following : styles.toFollow,
+                      ]}
                     >
                       <Text
                         style={[
@@ -181,19 +280,18 @@ const styles = StyleSheet.create({
     paddingBottom: 20 
   },
 
-  headerRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18, 
-    paddingTop: 10, 
-    paddingBottom: 6 
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
 
   brandRow: { 
     flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 10 
+    alignItems: 'center' 
   },
 
   logoImage: { 
@@ -202,60 +300,64 @@ const styles = StyleSheet.create({
     resizeMode: 'contain' 
   },
 
-  brandText: { 
-    color: '#FFFFFF', 
-    fontSize: 18, 
-    fontWeight: '800', 
-    letterSpacing: 0.2 
+  profileBubble: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#161616',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
+    overflow: 'hidden',
   },
 
-  profileBubble: {
-    width: 36, 
-    height: 36, 
-    borderRadius: 18, 
-    backgroundColor: '#161616',
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1, 
-    borderColor: '#222'
+  profileImage: { 
+    width: '100%', 
+    height: '100%' 
   },
 
   profileInitial: { 
     color: '#fff', 
-    fontWeight: '800' 
+    fontWeight: '800', 
+    fontSize: 18 
+  },
+
+  profileLoading: { 
+    backgroundColor: '#121212' 
   },
 
   sectionIntroTitle: {
-    marginTop: 6, 
+    marginTop: 6,
     paddingHorizontal: 18,
-    color: '#FFFFFF', 
-    fontSize: 22, 
-    fontWeight: '800', 
-    letterSpacing: -0.2
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
 
   sectionIntroSubtitle: {
-    marginTop: 6, 
+    marginTop: 6,
     paddingHorizontal: 18,
-    color: '#CFCFCF', 
-    fontSize: 13.5
+    color: '#CFCFCF',
+    fontSize: 13.5,
   },
 
   postCard: {
-    marginTop: 16, 
+    marginTop: 16,
     marginHorizontal: 18,
-    backgroundColor: '#0F0F0F', 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    borderColor: '#1E1E1E', 
-    padding: 14
+    backgroundColor: '#0F0F0F',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
+    padding: 14,
   },
 
-  postHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 10, 
-    marginBottom: 8 
+  postHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
   },
 
   postAvatar: { 
@@ -275,12 +377,12 @@ const styles = StyleSheet.create({
     fontSize: 11 
   },
 
-  postTitle: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: '800', 
-    marginTop: 6, 
-    marginBottom: 6 
+  postTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 6,
+    marginBottom: 6,
   },
 
   postBody: { 
@@ -289,12 +391,12 @@ const styles = StyleSheet.create({
     lineHeight: 20 
   },
 
-  postMore: { 
-    color: '#BEBEBE', 
-    fontSize: 12, 
-    fontWeight: '700', 
-    marginTop: 8, 
-    textDecorationLine: 'underline' 
+  postMore: {
+    color: '#BEBEBE',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 8,
+    textDecorationLine: 'underline',
   },
 
   peopleHeader: { 
@@ -314,11 +416,11 @@ const styles = StyleSheet.create({
     marginTop: 2 
   },
 
-  emptyText: { 
-    color: '#8C8C8C', 
-    fontSize: 12, 
-    paddingHorizontal: 18, 
-    marginTop: 10 
+  emptyText: {
+    color: '#8C8C8C',
+    fontSize: 12,
+    paddingHorizontal: 18,
+    marginTop: 10,
   },
 
   peopleList: { 
@@ -328,29 +430,29 @@ const styles = StyleSheet.create({
   },
 
   personRow: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#0F0F0F', 
-    borderRadius: 16, 
-    borderWidth: 1, 
-    borderColor: '#1E1E1E', 
-    padding: 12
+    backgroundColor: '#0F0F0F',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1E1E1E',
+    padding: 12,
   },
 
-  personLeft: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 10, 
-    flex: 1, 
-    paddingRight: 10 
+  personLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    paddingRight: 10,
   },
 
-  personAvatar: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    overflow: 'hidden' 
+  personAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    overflow: 'hidden',
   },
 
   personAvatarImg: { 
@@ -359,14 +461,14 @@ const styles = StyleSheet.create({
   },
 
   personAvatarFallback: {
-    width: '100%', 
-    height: '100%', 
-    borderRadius: 22, 
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
     backgroundColor: '#161616',
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1, 
-    borderColor: '#222'
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
   },
 
   avatarInitial: { 
@@ -387,12 +489,12 @@ const styles = StyleSheet.create({
   },
 
   followBtn: {
-    minWidth: 92, 
-    paddingHorizontal: 14, 
-    paddingVertical: 10, 
-    borderRadius: 12, 
+    minWidth: 92,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1
+    borderWidth: 1,
   },
 
   toFollow: { 
@@ -415,5 +517,9 @@ const styles = StyleSheet.create({
     color: '#EDEDED', 
     fontWeight: '800', 
     fontSize: 12.5 
-  }
+  },
+
+  followText: { 
+    letterSpacing: 0.5 
+  },
 });

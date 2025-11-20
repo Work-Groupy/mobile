@@ -11,48 +11,65 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { API_URL } from '@env';
-import axios from "axios";
+import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function LoginScreen() {
   const navigation = useNavigation();
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [lembrar, setLembrar] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-  if (!email.trim() || !senha.trim()) {
-    alert("Preencha o e-mail e a senha.");
-    return;
-  }
+    if (!email.trim() || !senha.trim()) {
+      Alert.alert('Atenção', 'Preencha o e-mail e a senha.');
+      return;
+    }
 
-  const payload = {
-    email: email.trim(),
-    password: senha,
+    const payload = {
+      email: email.trim(),
+      password: senha,
+    };
+
+    try {
+      setLoading(true);
+
+      const response = await axios.post(`${API_URL}/user/login`, payload, {
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        timeout: 10000,
+      });
+
+      const userData = response.data;
+
+      await AsyncStorage.setItem('authUser', JSON.stringify(userData));
+
+      setSenha('');
+
+      navigation.navigate('MainTabs');
+    } catch (err) {
+      console.log('Erro login:', err?.response?.data || err.message);
+      Alert.alert('Falha no login', parseErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  try {
-    const response = await axios.post(
-      `${API_URL}/user/login`,
-      payload,
-      {
-        headers: { "Content-Type": "application/json" },
+  const parseErrorMessage = (err) => {
+    if (err?.response?.data) {
+      if (typeof err.response.data === 'string') return err.response.data;
+      if (typeof err.response.data === 'object') {
+        return Object.values(err.response.data).join('\n');
       }
-    );
-
-    console.log("Login realizado:", response.data);
-
-    navigation.navigate("Home");
-
-  } catch (err) {
-    console.log("Erro:", err.response?.data || err.message);
-    alert("E-mail ou senha incorretos.");
-  }
-};
+    }
+    return 'E-mail ou senha incorretos.';
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -65,12 +82,13 @@ export default function LoginScreen() {
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
-            bounces={false}
             keyboardShouldPersistTaps="handled"
+            bounces={false}
           >
             <View style={styles.logoWrapper}>
               <Image source={require('../assets/logo.png')} style={styles.logoImage} />
             </View>
+
             <Text style={styles.kicker}>Acessar conta</Text>
             <Text style={styles.heroTitle}>
               Entrar no <Text style={styles.heroAccent}>Work Group</Text>
@@ -78,6 +96,7 @@ export default function LoginScreen() {
             <Text style={styles.heroSubtitle}>
               Bem-vindo de volta. Digite seus dados para continuar.
             </Text>
+
             <View style={styles.formWrapper}>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>E-mail</Text>
@@ -92,10 +111,10 @@ export default function LoginScreen() {
                     autoCapitalize="none"
                     autoCorrect={false}
                     textContentType="emailAddress"
+                    editable={!loading}
                   />
                 </View>
               </View>
-
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Senha</Text>
                 <View style={styles.inputBoxRow}>
@@ -108,11 +127,13 @@ export default function LoginScreen() {
                     secureTextEntry={!mostrarSenha}
                     autoCapitalize="none"
                     textContentType="password"
+                    editable={!loading}
                   />
                   <TouchableOpacity
                     onPress={() => setMostrarSenha(v => !v)}
                     style={styles.toggleBtn}
                     activeOpacity={0.7}
+                    disabled={loading}
                   >
                     <Text style={styles.toggleBtnText}>
                       {mostrarSenha ? 'Ocultar' : 'Mostrar'}
@@ -120,36 +141,38 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-
               <View style={styles.rowBetween}>
-
                 <TouchableOpacity
                   activeOpacity={0.8}
+                  disabled={loading}
                   // onPress={() => navigation.navigate('ForgotPassword')}
                 >
                   <Text style={styles.linkText}>Esqueceu a senha?</Text>
                 </TouchableOpacity>
               </View>
-
               <View style={styles.ctaStack}>
                 <TouchableOpacity
                   activeOpacity={0.85}
-                  style={styles.primaryButton}
+                  style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
                   onPress={handleLogin}
+                  disabled={loading}
                 >
-                  <Text style={styles.primaryButtonText}>Entrar</Text>
+                  {loading ? (
+                    <ActivityIndicator color="#000" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Entrar</Text>
+                  )}
                 </TouchableOpacity>
-
                 <TouchableOpacity
                   activeOpacity={0.85}
                   style={styles.secondaryButton}
                   onPress={() => navigation.navigate('Register')}
+                  disabled={loading}
                 >
                   <Text style={styles.secondaryButtonText}>Criar Conta</Text>
                 </TouchableOpacity>
               </View>
             </View>
-
             <View style={styles.footerArea}>
               <View style={styles.footerLinksRow}>
                 <Text style={styles.footerBrand}>© {new Date().getFullYear()} Work Group</Text>
@@ -159,7 +182,6 @@ export default function LoginScreen() {
                 <Text style={styles.footerLink}>Termos</Text>
               </View>
             </View>
-
             <View style={{ height: 40 }} />
           </ScrollView>
         </KeyboardAvoidingView>
@@ -169,28 +191,32 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  gradient: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 24,
-    paddingBottom: 40,
+  safe: { 
+    flex: 1, 
+    backgroundColor: '#000' 
   },
 
-  logoWrapper: {
-    alignItems: 'center',
-    marginBottom: 22,
+  gradient: { 
+    flex: 1 
   },
-  logoImage: {
-    width: 100,
-    height: 100,
-    resizeMode: 'contain',
-    tintColor: undefined,
+
+  scrollContent: { 
+    paddingTop: 24, 
+    paddingBottom: 40 
   },
+
+  logoWrapper: { 
+    alignItems: 'center', 
+    marginBottom: 22 
+  },
+
+  logoImage: { 
+    width: 100, 
+    height: 100, 
+    resizeMode: 'contain', 
+    tintColor: undefined 
+  },
+
   kicker: {
     color: '#AAAAAA',
     fontSize: 12,
@@ -200,6 +226,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 8,
   },
+
   heroTitle: {
     fontSize: 28,
     fontWeight: '800',
@@ -209,11 +236,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     textAlign: 'center',
   },
-  heroAccent: {
-    color: '#FFFFFF',
-    textDecorationLine: 'underline',
-    textDecorationColor: '#FFFFFF',
+
+  heroAccent: { 
+    color: '#FFFFFF', 
+    textDecorationLine: 'underline', 
+    textDecorationColor: '#FFFFFF' 
   },
+
   heroSubtitle: {
     marginTop: 10,
     fontSize: 14,
@@ -224,12 +253,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: 20,
   },
-  formWrapper: {
-    paddingHorizontal: 24,
+
+  formWrapper: { 
+    paddingHorizontal: 24 
   },
-  inputGroup: {
-    marginBottom: 14,
+
+  inputGroup: { 
+    marginBottom: 14 
   },
+
   inputLabel: {
     color: '#E6E6E6',
     fontSize: 13,
@@ -237,6 +269,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     letterSpacing: 0.2,
   },
+
   inputBox: {
     backgroundColor: '#111111',
     borderWidth: 1,
@@ -245,6 +278,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+
   inputBoxRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -255,11 +289,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
   },
-  input: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    paddingVertical: 10,
+
+  input: { 
+    color: '#FFFFFF', 
+    fontSize: 15, 
+    paddingVertical: 10 
   },
+
   toggleBtn: {
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -269,69 +305,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#262626',
   },
-  toggleBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
+
+  toggleBtnText: { 
+    color: '#FFFFFF', 
+    fontSize: 12, 
+    fontWeight: '700' 
   },
+
   rowBetween: {
     marginTop: 8,
     marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
-  rememberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+
+  linkText: { 
+    color: '#BBBBBB', 
+    fontSize: 12.5, 
+    fontWeight: '700' 
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#444444',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
+
+  ctaStack: { 
+    marginTop: 16, 
+    gap: 12 
   },
-  checkboxChecked: {
-    borderColor: '#FFFFFF',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 2,
-    backgroundColor: '#000000',
-  },
-  rememberText: {
-    color: '#CFCFCF',
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  linkText: {
-    color: '#BBBBBB',
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  ctaStack: {
-    marginTop: 16,
-    gap: 12,
-  },
+
   primaryButton: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
   },
+
+  primaryButtonDisabled: { 
+    backgroundColor: '#CFCFCF' 
+  },
+
   primaryButtonText: {
     color: '#000000',
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
+
   secondaryButton: {
     backgroundColor: '#111111',
     paddingVertical: 14,
@@ -340,77 +357,41 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2A2A2A',
   },
-  secondaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15.5,
-    fontWeight: '700',
+
+  secondaryButtonText: { 
+    color: '#FFFFFF', 
+    fontSize: 15.5, 
+    fontWeight: '700' 
   },
-  ghostButton: {
-    paddingVertical: 10,
-    alignItems: 'center',
+
+  footerArea: { 
+    marginTop: 36, 
+    alignItems: 'center', 
+    paddingHorizontal: 24 
   },
-  ghostButtonText: {
-    color: '#BEBEBE',
-    fontSize: 14,
-    fontWeight: '700',
+
+  footerBrand: { 
+    color: '#777777', 
+    fontSize: 12, 
+    fontWeight: '600' 
   },
-  dividerRow: {
-    marginTop: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  divider: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#222222',
-  },
-  dividerText: {
-    color: '#8C8C8C',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  socialRow: {
-    marginTop: 14,
-    gap: 10,
-  },
-  socialButton: {
-    backgroundColor: '#121212',
-    borderWidth: 1,
-    borderColor: '#222222',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  socialText: {
-    color: '#EDEDED',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  footerArea: {
-    marginTop: 36,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  footerBrand: {
-    color: '#777777',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+
   footerLinksRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
     flexWrap: 'wrap',
   },
-  footerLink: {
-    color: '#B5B5B5',
-    fontSize: 12,
-    fontWeight: '700',
+
+  footerLink: { 
+    color: '#B5B5B5', 
+    fontSize: 12, 
+    fontWeight: '700' 
   },
-  footerSep: {
-    color: '#333333',
-    fontSize: 12,
-    fontWeight: '700',
+
+  footerSep: { 
+    color: '#333333', 
+    fontSize: 12, 
+    fontWeight: '700' 
   },
 });
