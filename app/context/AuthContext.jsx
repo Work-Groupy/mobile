@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '@env';
 
@@ -12,7 +12,10 @@ export function AuthProvider({ children }) {
     (async () => {
       try {
         const raw = await AsyncStorage.getItem('authUser');
-        if (raw) setUser(JSON.parse(raw));
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          setUser(parsed);
+        }
       } finally {
         setLoadingInit(false);
       }
@@ -20,19 +23,39 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    const res = await fetch(`${API_URL}/user/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      const msg = await res.text().catch(() => `Erro ${res.status}`);
-      throw new Error(msg);
+    const normalizedEmail = String(email).trim().toLowerCase();
+    try {
+      const res = await fetch(`${API_URL}/user/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ email: normalizedEmail, password }),
+      });
+
+      if (!res.ok) {
+        let msg = `Erro ${res.status}`;
+        try {
+          const text = await res.text();
+          if (text) msg = text;
+        } catch {}
+        throw new Error(msg || 'Falha no login.');
+      }
+
+      const data = await res.json();
+
+      const normalizedUser = {
+        ...data,
+        email: data?.email ? String(data.email).toLowerCase() : normalizedEmail,
+      };
+
+      await AsyncStorage.setItem('authUser', JSON.stringify(normalizedUser));
+      setUser(normalizedUser);
+      return normalizedUser;
+    } catch (e) {
+      throw e;
     }
-    const data = await res.json();
-    await AsyncStorage.setItem('authUser', JSON.stringify(data));
-    setUser(data);
-    return data;
   }
 
   async function logout() {
@@ -40,8 +63,51 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  const refreshUser = useCallback(async () => {
+    const raw = await AsyncStorage.getItem('authUser');
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        setUser(parsed);
+        return parsed;
+      } catch {
+        return null;
+      }
+    } else {
+      setUser(null);
+      return null;
+    }
+  }, []);
+
+  const refetchUserFromAPI = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem('authUser');
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      if (!parsed?.id) return parsed;
+
+      const res = await fetch(`${API_URL}/user/${parsed.id}`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return parsed;
+
+      const fresh = await res.json();
+      const normalizedFresh = {
+        ...fresh,
+        email: fresh?.email ? String(fresh.email).toLowerCase() : parsed.email,
+      };
+      await AsyncStorage.setItem('authUser', JSON.stringify(normalizedFresh));
+      setUser(normalizedFresh);
+      return normalizedFresh;
+    } catch {
+      return null;
+    }
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loadingInit }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, loadingInit, refreshUser, refetchUserFromAPI }}
+    >
       {children}
     </AuthContext.Provider>
   );
