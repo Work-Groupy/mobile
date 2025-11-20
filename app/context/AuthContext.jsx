@@ -24,43 +24,51 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const normalizedEmail = String(email).trim().toLowerCase();
-    try {
-      const res = await fetch(`${API_URL}/user/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ email: normalizedEmail, password }),
-      });
-
-      if (!res.ok) {
-        let msg = `Erro ${res.status}`;
-        try {
-          const text = await res.text();
-          if (text) msg = text;
-        } catch {}
-        throw new Error(msg || 'Falha no login.');
-      }
-
-      const data = await res.json();
-
-      const normalizedUser = {
-        ...data,
-        email: data?.email ? String(data.email).toLowerCase() : normalizedEmail,
-      };
-
-      await AsyncStorage.setItem('authUser', JSON.stringify(normalizedUser));
-      setUser(normalizedUser);
-      return normalizedUser;
-    } catch (e) {
-      throw e;
+    const res = await fetch(`${API_URL}/user/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email: normalizedEmail, password }),
+    });
+    if (!res.ok) {
+      let msg = `Erro ${res.status}`;
+      try {
+        const text = await res.text();
+        if (text) msg = text;
+      } catch {}
+      throw new Error(msg || 'Falha no login.');
     }
+    const data = await res.json();
+    const normalizedUser = {
+      ...data,
+      email: data?.email ? String(data.email).toLowerCase() : normalizedEmail,
+    };
+    await AsyncStorage.setItem('authUser', JSON.stringify(normalizedUser));
+    setUser(normalizedUser);
+    return normalizedUser;
   }
 
   async function logout() {
     await AsyncStorage.removeItem('authUser');
     setUser(null);
+  }
+
+  async function deleteAccount() {
+    if (!user?.id) throw new Error('Usuário inválido.');
+    const res = await fetch(`${API_URL}/user/delete/${user.id}`, {
+      method: 'DELETE',
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      let msg = `Erro ${res.status}`;
+      try {
+        const text = await res.text();
+        if (text) msg = text;
+      } catch {}
+      throw new Error(msg || 'Falha ao deletar conta.');
+    }
+    await AsyncStorage.removeItem('authUser');
+    setUser(null);
+    return true;
   }
 
   const refreshUser = useCallback(async () => {
@@ -106,7 +114,15 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, loadingInit, refreshUser, refetchUserFromAPI }}
+      value={{
+        user,
+        login,
+        logout,
+        deleteAccount,
+        loadingInit,
+        refreshUser,
+        refetchUserFromAPI,
+      }}
     >
       {children}
     </AuthContext.Provider>
